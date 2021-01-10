@@ -1,15 +1,16 @@
+import re
+import time
+
 from selenium import webdriver
-import os
-import pathlib
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import StaleElementReferenceException
+from twilio.rest import Client
 
 
 def getCredientals():
     info = open("/home/weston/Documents/Python/pass/credientals.txt")
     testing = info.read()
-    user = (testing[0:testing.index("\n")])
-    pwd = (testing[testing.index("\n"):])
-    return(user, pwd)
+    allOftheThings = testing.split(",")
+    return(allOftheThings[0], allOftheThings[1], allOftheThings[2],allOftheThings[3], allOftheThings[4], allOftheThings[5])
 
 def start(usr, password):
     driverLocation = "/usr/bin/chromedriver"
@@ -24,16 +25,71 @@ def start(usr, password):
     pwd.send_keys(password)
     button = browser.find_element_by_id("signin_button")
     button.click()
-
-    #to combat the search happening before page render will wait until the eleements are present
-    posts = browser.find_element_by_class_name('classified-item-card')
-    print(posts)
     return browser
+
+
+
+
+def getItems(browser, token1, token2, to, userSend):
+    # to combat the search happening before page render will wait until the eleements are present
+    browser.implicitly_wait(10)
+    list = []
+    iterator = 0
+    for i in browser.find_elements_by_class_name('classified-item-card'):
+
+        if iterator == 10:
+            break
+        try:
+            listingName = i.text
+            list.append(listingName)
+        except StaleElementReferenceException:
+            continue
+        iterator += 1
+
+    print(list)
+
+    cleanedList = simplifyData(list)
+    message(cleanedList, token1, token2, to, userSend)
+
+    return browser
+
+def simplifyData(list):
+    #send the data that is received from the loop and get just what the product is so that the next algorithm can analyze how much is is worth
+    newList = []
+    for i in list:
+        indexFree = re.search("Free",i)
+        if indexFree is None:
+            continue
+        positionOne = i.index("\n", indexFree.start())
+        positionTwo = i.index("\n", positionOne+1)
+        description = i[positionOne+1:positionTwo]
+        newList.append(description)
+        print(description)
+        # print(i[positionOne:positionTwo])
+    return newList
+
+
+def message(cleanedList, token1, token2, to, userSend):
+    message = "\n".join(cleanedList)
+    client = Client(token1, token2)
+    client.messages.create(to=to, from_= userSend, body = message)
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+    #need to add part that refreshes the page every few minutes and repeates the process
     userInfo = getCredientals()
     browser = start(userInfo[0], userInfo[1])
+    getItems(browser, userInfo[2], userInfo[3], userInfo[4], userInfo[5])
+    while(True):
+        time.sleep(10)
+        browser.refresh()
+        getItems(browser, userInfo[2], userInfo[3], userInfo[4], userInfo[5])
+
+
+
+
+
+
 
 
 
